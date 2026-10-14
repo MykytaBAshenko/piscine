@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+
 #include "bsq.h"
 
 static size_t	min3(size_t a, size_t b, size_t c)
@@ -21,46 +22,51 @@ static size_t	min3(size_t a, size_t b, size_t c)
 	return (a);
 }
 
-/*
-** dp[i][j] = side of the biggest square whose BOTTOM-RIGHT corner is (i, j)
-**   obstacle          -> 0
-**   first row/column  -> 1
-**   otherwise         -> 1 + min(top, left, top-left)
-*/
-static size_t	cell_val(t_map *m, size_t *dp, size_t i, size_t j)
+static size_t	dfs(t_map *m, size_t *dp, size_t r, size_t c)
 {
-	if (m->data[m->start + i * (m->w + 1) + j] == m->o)
+	size_t	down;
+	size_t	right;
+	size_t	diag;
+	size_t	idx;
+
+	if (r >= (size_t)m->n || c >= m->w)
 		return (0);
-	if (i == 0 || j == 0)
-		return (1);
-	return (min3(dp[(i - 1) * m->w + j], dp[i * m->w + j - 1],
-			dp[(i - 1) * m->w + j - 1]) + 1);
+	idx = r * m->w + c;
+	if (dp[idx] != UNSET)
+		return (dp[idx]);
+	down = dfs(m, dp, r + 1, c);
+	right = dfs(m, dp, r, c + 1);
+	diag = dfs(m, dp, r + 1, c + 1);
+	dp[idx] = 0;
+	if (m->data[m->start + r * (m->w + 1) + c] != m->o)
+		dp[idx] = 1 + min3(down, right, diag);
+	return (dp[idx]);
 }
 
-static void	build(t_map *m, size_t *dp, t_best *b)
+static void	find_best(t_map *m, size_t *dp, t_best *b)
 {
-	size_t	i;
-	size_t	j;
+	size_t	r;
+	size_t	c;
 
-	i = 0;
-	while (i < (size_t)m->n)
+	r = 0;
+	while (r < (size_t)m->n)
 	{
-		j = 0;
-		while (j < m->w)
+		c = 0;
+		while (c < m->w)
 		{
-			dp[i * m->w + j] = cell_val(m, dp, i, j);
-			if (dp[i * m->w + j] > b->size)
+			if (dp[r * m->w + c] > b->size)
 			{
-				b->size = dp[i * m->w + j];
-				b->row = i;
-				b->col = j;
+				b->size = dp[r * m->w + c];
+				b->row = r;
+				b->col = c;
 			}
-			j++;
+			c++;
 		}
-		i++;
+		r++;
 	}
 }
 
+/* (row, col) is now the TOP-LEFT corner, so we fill down and right. */
 static void	fill(t_map *m, t_best *b)
 {
 	size_t	i;
@@ -74,7 +80,7 @@ static void	fill(t_map *m, t_best *b)
 		j = 0;
 		while (j < b->size)
 		{
-			m->data[base - i * (m->w + 1) - j] = m->f;
+			m->data[base + i * (m->w + 1) + j] = m->f;
 			j++;
 		}
 		i++;
@@ -84,6 +90,7 @@ static void	fill(t_map *m, t_best *b)
 int	solve(t_map *m)
 {
 	size_t	*dp;
+	size_t	i;
 	t_best	best;
 
 	if ((size_t)m->n > (size_t)-1 / sizeof(size_t) / m->w)
@@ -91,10 +98,14 @@ int	solve(t_map *m)
 	dp = malloc(sizeof(size_t) * m->n * m->w);
 	if (!dp)
 		return (0);
+	i = 0;
+	while (i < (size_t)m->n * m->w)
+		dp[i++] = UNSET;
+	dfs(m, dp, 0, 0);
 	best.size = 0;
 	best.row = 0;
 	best.col = 0;
-	build(m, dp, &best);
+	find_best(m, dp, &best);
 	free(dp);
 	fill(m, &best);
 	return (1);
